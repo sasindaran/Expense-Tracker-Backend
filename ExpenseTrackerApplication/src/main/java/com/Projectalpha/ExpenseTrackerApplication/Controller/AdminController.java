@@ -18,6 +18,7 @@ public class AdminController {
 
     @GetMapping("/users")
     public List<User> getAllUsers() {
+        System.out.println("Request made");
         return userService.getAllUsers();
     }
 

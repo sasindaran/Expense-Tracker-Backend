@@ -26,23 +26,22 @@ public class SecurityConfig {
         http
                 .csrf(csrf -> csrf.disable())
                 .cors(Customizer.withDefaults())
+
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/auth/register", "/auth/login").permitAll()
+                        .requestMatchers("/auth/register", "/auth/login", "/auth/logout").permitAll()
                         .requestMatchers("/admin/**").hasRole("ADMIN")
                         .requestMatchers("/expenses/**").hasRole("USER")
                         .requestMatchers("/categories/**").hasRole("USER")
                         .anyRequest().authenticated()
                 )
+
+                // SPA mode
                 .formLogin(form -> form.disable())
-                .logout(logout -> logout
-                        .logoutUrl("/logout")
-                        .invalidateHttpSession(true)
-                        .deleteCookies("JSESSIONID")
-                );
+                .logout(logout -> logout.disable());
 
         return http.build();
-
     }
+
 
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
