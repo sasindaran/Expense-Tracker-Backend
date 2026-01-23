@@ -1,0 +1,462 @@
+================================================================================
+                    EXPENSE TRACKER API - POSTMAN TESTING GUIDE
+================================================================================
+
+BASE URL: http://localhost:8080
+Database: MySQL (localhost:3306/expense_tracker)
+Authentication: HTTP Basic Authentication (Spring Security)
+
+================================================================================
+                              TABLE OF CONTENTS
+================================================================================
+1. Authentication Setup
+2. Expense Management APIs
+3. Sample Test Data
+4. Expected Responses
+5. Common Error Scenarios
+6. Testing Workflow
+
+================================================================================
+                          1. AUTHENTICATION SETUP
+================================================================================
+
+All API endpoints require HTTP Basic Authentication.
+
+In Postman:
+1. Go to the "Authorization" tab
+2. Select "Basic Auth" from the Type dropdown
+3. Enter your credentials:
+   - Username: user@example.com (or your registered email)
+   - Password: your_password
+
+Note: You need to have a user registered in the database first.
+
+================================================================================
+                        2. EXPENSE MANAGEMENT APIs
+================================================================================
+
+--------------------------------------------------------------------------------
+API 1: ADD NEW EXPENSE
+--------------------------------------------------------------------------------
+Method: POST
+URL: http://localhost:8080/expenses
+Headers:
+  - Content-Type: application/json
+Authorization: Basic Auth (email & password)
+
+Request Body (JSON):
+{
+  "category": {
+    "id": 1
+  },
+  "amount": 150.50,
+  "description": "Grocery shopping at Walmart",
+  "expenseDate": "2026-01-20"
+}
+
+Expected Response (200 OK):
+{
+  "id": 1,
+  "user": {
+    "id": 1,
+    "email": "user@example.com",
+    "role": {
+      "id": 1,
+      "name": "USER"
+    },
+    "createdAt": "2026-01-20T14:30:00"
+  },
+  "category": {
+    "id": 1,
+    "name": "Groceries",
+    "type": "EXPENSE"
+  },
+  "amount": 150.50,
+  "description": "Grocery shopping at Walmart",
+  "expenseDate": "2026-01-20",
+  "createdAt": "2026-01-20T14:38:00"
+}
+
+--------------------------------------------------------------------------------
+API 2: GET ALL MY EXPENSES
+--------------------------------------------------------------------------------
+Method: GET
+URL: http://localhost:8080/expenses
+Authorization: Basic Auth (email & password)
+
+Expected Response (200 OK):
+[
+  {
+    "id": 1,
+    "user": {
+      "id": 1,
+      "email": "user@example.com",
+      "role": {
+        "id": 1,
+        "name": "USER"
+      },
+      "createdAt": "2026-01-20T14:30:00"
+    },
+    "category": {
+      "id": 1,
+      "name": "Groceries",
+      "type": "EXPENSE"
+    },
+    "amount": 150.50,
+    "description": "Grocery shopping at Walmart",
+    "expenseDate": "2026-01-20",
+    "createdAt": "2026-01-20T14:38:00"
+  },
+  {
+    "id": 2,
+    "user": {
+      "id": 1,
+      "email": "user@example.com",
+      "role": {
+        "id": 1,
+        "name": "USER"
+      },
+      "createdAt": "2026-01-20T14:30:00"
+    },
+    "category": {
+      "id": 2,
+      "name": "Transportation",
+      "type": "EXPENSE"
+    },
+    "amount": 50.00,
+    "description": "Uber ride to office",
+    "expenseDate": "2026-01-19",
+    "createdAt": "2026-01-19T09:15:00"
+  }
+]
+
+Note: Returns only expenses belonging to the authenticated user.
+
+--------------------------------------------------------------------------------
+API 3: DELETE EXPENSE
+--------------------------------------------------------------------------------
+Method: DELETE
+URL: http://localhost:8080/expenses/{id}
+Example: http://localhost:8080/expenses/1
+Authorization: Basic Auth (email & password)
+
+Expected Response (200 OK):
+No content (void response)
+
+Note: Users can only delete their own expenses. Attempting to delete another 
+user's expense will result in an error.
+
+================================================================================
+                           3. SAMPLE TEST DATA
+================================================================================
+
+--------------------------------------------------------------------------------
+Sample Categories (Pre-populate in database)
+--------------------------------------------------------------------------------
+INSERT INTO categories (id, name, type) VALUES 
+(1, 'Groceries', 'EXPENSE'),
+(2, 'Transportation', 'EXPENSE'),
+(3, 'Entertainment', 'EXPENSE'),
+(4, 'Utilities', 'EXPENSE'),
+(5, 'Healthcare', 'EXPENSE'),
+(6, 'Dining', 'EXPENSE'),
+(7, 'Shopping', 'EXPENSE'),
+(8, 'Education', 'EXPENSE');
+
+--------------------------------------------------------------------------------
+Sample Roles (Pre-populate in database)
+--------------------------------------------------------------------------------
+INSERT INTO roles (id, name) VALUES 
+(1, 'USER'),
+(2, 'ADMIN');
+
+--------------------------------------------------------------------------------
+Sample User (Pre-populate in database)
+--------------------------------------------------------------------------------
+-- Password should be BCrypt encoded
+-- Example: password "password123" encoded
+INSERT INTO users (id, email, password, role_id, created_at) VALUES 
+(1, 'user@example.com', '$2a$10$encoded_password_here', 1, NOW());
+
+Note: Use BCrypt encoder to generate password hash.
+
+--------------------------------------------------------------------------------
+Sample Expense Test Cases
+--------------------------------------------------------------------------------
+
+Test Case 1: Small Daily Expense
+{
+  "category": {"id": 2},
+  "amount": 15.75,
+  "description": "Coffee and breakfast",
+  "expenseDate": "2026-01-20"
+}
+
+Test Case 2: Large Monthly Expense
+{
+  "category": {"id": 4},
+  "amount": 1250.00,
+  "description": "Monthly rent payment",
+  "expenseDate": "2026-01-01"
+}
+
+Test Case 3: Entertainment Expense
+{
+  "category": {"id": 3},
+  "amount": 45.00,
+  "description": "Movie tickets and popcorn",
+  "expenseDate": "2026-01-18"
+}
+
+Test Case 4: Healthcare Expense
+{
+  "category": {"id": 5},
+  "amount": 200.00,
+  "description": "Doctor consultation and medicines",
+  "expenseDate": "2026-01-15"
+}
+
+Test Case 5: Minimal Required Fields
+{
+  "category": {"id": 1},
+  "amount": 25.00,
+  "expenseDate": "2026-01-20"
+}
+
+================================================================================
+                          4. EXPECTED RESPONSES
+================================================================================
+
+--------------------------------------------------------------------------------
+Success Responses
+--------------------------------------------------------------------------------
+200 OK - Request successful
+  - GET /expenses - Returns list of expenses
+  - POST /expenses - Returns created expense with ID
+  - DELETE /expenses/{id} - Returns void (no content)
+
+--------------------------------------------------------------------------------
+Error Responses
+--------------------------------------------------------------------------------
+400 Bad Request - Invalid request data
+Example: Missing required fields
+{
+  "timestamp": "2026-01-20T14:38:00",
+  "status": 400,
+  "error": "Bad Request",
+  "message": "Validation failed"
+}
+
+401 Unauthorized - Authentication failed
+Example: Invalid credentials
+{
+  "timestamp": "2026-01-20T14:38:00",
+  "status": 401,
+  "error": "Unauthorized",
+  "message": "Authentication failed"
+}
+
+403 Forbidden - Access denied
+Example: Trying to delete another user's expense
+
+404 Not Found - Resource not found
+Example: Expense ID doesn't exist
+
+500 Internal Server Error - Server error
+Example: Database connection issue
+
+================================================================================
+                       5. COMMON ERROR SCENARIOS
+================================================================================
+
+Scenario 1: Missing Authentication
+Problem: No credentials provided
+Solution: Add Basic Auth in Authorization tab
+
+Scenario 2: Invalid Category ID
+Request:
+{
+  "category": {"id": 999},
+  "amount": 100.00,
+  "expenseDate": "2026-01-20"
+}
+Error: Foreign key constraint violation
+
+Scenario 3: Missing Required Fields
+Request:
+{
+  "amount": 100.00
+}
+Error: Missing category and expenseDate
+
+Scenario 4: Invalid Date Format
+Request:
+{
+  "category": {"id": 1},
+  "amount": 100.00,
+  "expenseDate": "20-01-2026"
+}
+Error: Date parsing error (use YYYY-MM-DD format)
+
+Scenario 5: Negative Amount
+Request:
+{
+  "category": {"id": 1},
+  "amount": -50.00,
+  "expenseDate": "2026-01-20"
+}
+Note: May be accepted depending on validation rules
+
+Scenario 6: Deleting Non-existent Expense
+DELETE http://localhost:8080/expenses/9999
+Error: 404 Not Found or 403 Forbidden
+
+================================================================================
+                          6. TESTING WORKFLOW
+================================================================================
+
+Step 1: Setup Database
+  - Create MySQL database: expense_tracker
+  - Run schema creation scripts
+  - Insert sample categories and roles
+  - Create test user with BCrypt password
+
+Step 2: Start Application
+  - Run: mvn spring-boot:run
+  - Verify application starts on port 8080
+  - Check console for any errors
+
+Step 3: Test Authentication
+  - Create a simple GET request to /expenses
+  - Add Basic Auth credentials
+  - Verify 200 OK response (empty array if no expenses)
+
+Step 4: Test Create Expense
+  - Use POST /expenses with sample data
+  - Verify expense is created with ID
+  - Check database to confirm insertion
+
+Step 5: Test Get Expenses
+  - Use GET /expenses
+  - Verify created expense appears in list
+  - Confirm only authenticated user's expenses are returned
+
+Step 6: Test Delete Expense
+  - Use DELETE /expenses/{id} with valid ID
+  - Verify 200 OK response
+  - Use GET /expenses to confirm deletion
+
+Step 7: Test Edge Cases
+  - Try invalid category IDs
+  - Try missing required fields
+  - Try invalid date formats
+  - Try accessing with wrong credentials
+  - Try deleting already deleted expense
+
+Step 8: Test Multiple Users
+  - Create second user in database
+  - Login as second user
+  - Create expenses for second user
+  - Verify users can only see their own expenses
+  - Verify users cannot delete other users' expenses
+
+================================================================================
+                         POSTMAN COLLECTION SETUP
+================================================================================
+
+Create a Postman Collection named "Expense Tracker API" with:
+
+1. Environment Variables:
+   - base_url: http://localhost:8080
+   - user_email: user@example.com
+   - user_password: password123
+
+2. Folders:
+   - Authentication Tests
+   - Expense CRUD Operations
+   - Error Handling Tests
+   - Edge Cases
+
+3. Pre-request Scripts (Collection level):
+   // Auto-set Basic Auth for all requests
+   pm.request.auth = {
+     type: 'basic',
+     basic: [
+       {key: 'username', value: pm.environment.get('user_email')},
+       {key: 'password', value: pm.environment.get('user_password')}
+     ]
+   };
+
+4. Tests (for each request):
+   // Verify status code
+   pm.test("Status code is 200", function () {
+     pm.response.to.have.status(200);
+   });
+
+   // Verify response time
+   pm.test("Response time is less than 500ms", function () {
+     pm.expect(pm.response.responseTime).to.be.below(500);
+   });
+
+   // Verify JSON response
+   pm.test("Response is JSON", function () {
+     pm.response.to.be.json;
+   });
+
+================================================================================
+                            ADDITIONAL NOTES
+================================================================================
+
+1. Database Configuration:
+   - Ensure MySQL is running on localhost:3306
+   - Database name: expense_tracker
+   - Username: root
+   - Password: root
+   - Update application.properties if different
+
+2. Security:
+   - All endpoints require authentication
+   - Passwords are BCrypt encoded
+   - Users can only access their own data
+
+3. Data Validation:
+   - Amount: Required, decimal with 2 decimal places
+   - Category: Required, must exist in database
+   - ExpenseDate: Required, format YYYY-MM-DD
+   - Description: Optional, string
+
+4. Date Handling:
+   - Use ISO date format: YYYY-MM-DD
+   - Timezone considerations may apply
+   - CreatedAt is auto-generated server-side
+
+5. Best Practices:
+   - Always include Content-Type: application/json header
+   - Use environment variables for base URL and credentials
+   - Create automated test scripts in Postman
+   - Save responses for documentation
+
+================================================================================
+                              QUICK REFERENCE
+================================================================================
+
+Endpoint Summary:
+  POST   /expenses        - Create new expense
+  GET    /expenses        - Get all my expenses
+  DELETE /expenses/{id}   - Delete expense by ID
+
+Required Headers:
+  Content-Type: application/json
+  Authorization: Basic {base64(email:password)}
+
+Common Status Codes:
+  200 - Success
+  400 - Bad Request
+  401 - Unauthorized
+  403 - Forbidden
+  404 - Not Found
+  500 - Server Error
+
+================================================================================
+                                END OF GUIDE
+================================================================================

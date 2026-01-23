@@ -1,0 +1,965 @@
+================================================================================
+              EXPENSE TRACKER - NEW TASK IMPLEMENTATION GUIDE
+================================================================================
+
+This document provides detailed implementation guides for new features and
+improvements to the Expense Tracker Backend project including DTO Pattern,
+JWT Authentication, OAuth2, and other enhancements.
+
+================================================================================
+                              TABLE OF CONTENTS
+================================================================================
+
+1. DTO (Data Transfer Object) Implementation
+2. JWT (JSON Web Token) Authentication
+3. OAuth2 Social Login Integration
+4. Global Exception Handling
+5. Input Validation
+6. API Versioning
+7. Pagination and Filtering
+8. Caching with Redis
+9. API Documentation with Swagger
+10. Logging Implementation
+11. Update Expense Endpoint
+12. Soft Delete Implementation
+13. Audit Fields
+14. CORS Configuration
+15. Rate Limiting
+
+================================================================================
+                    1. DTO (DATA TRANSFER OBJECT) IMPLEMENTATION
+================================================================================
+
+WHY USE DTOs?
+────────────────────────────────────────────────────────────────────
+✓ Separate API contract from domain model
+✓ Hide sensitive fields (e.g., password)
+✓ Prevent over-fetching/under-fetching
+✓ Version API independently from database
+✓ Reduce coupling between layers
+✓ Better security and performance
+
+IMPLEMENTATION STEPS
+────────────────────────────────────────────────────────────────────
+
+Step 1: Create DTO Package
+───────────────────────────────────────────────────────────────────
+Create: src/main/java/com/Projectalpha/ExpenseTrackerApplication/dto/
+
+Step 2: Create DTOs
+───────────────────────────────────────────────────────────────────
+
+File: dto/ExpenseRequestDTO.java
+────────────────────────────────────────────────────────────────────
+package com.Projectalpha.ExpenseTrackerApplication.dto;
+
+import lombok.Data;
+import java.math.BigDecimal;
+import java.time.LocalDate;
+
+@Data
+public class ExpenseRequestDTO {
+    private Long categoryId;
+    private BigDecimal amount;
+    private String description;
+    private LocalDate expenseDate;
+}
+
+File: dto/ExpenseResponseDTO.java
+────────────────────────────────────────────────────────────────────
+package com.Projectalpha.ExpenseTrackerApplication.dto;
+
+import lombok.Data;
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+
+@Data
+public class ExpenseResponseDTO {
+    private Long id;
+    private String userEmail;
+    private String categoryName;
+    private BigDecimal amount;
+    private String description;
+    private LocalDate expenseDate;
+    private LocalDateTime createdAt;
+}
+
+File: dto/UserResponseDTO.java
+────────────────────────────────────────────────────────────────────
+package com.Projectalpha.ExpenseTrackerApplication.dto;
+
+import lombok.Data;
+import java.time.LocalDateTime;
+
+@Data
+public class UserResponseDTO {
+    private Long id;
+    private String email;
+    private String roleName;
+    private LocalDateTime createdAt;
+    // Note: password is NOT included for security
+}
+
+File: dto/RegisterRequestDTO.java
+────────────────────────────────────────────────────────────────────
+package com.Projectalpha.ExpenseTrackerApplication.dto;
+
+import lombok.Data;
+import javax.validation.constraints.Email;
+import javax.validation.constraints.NotBlank;
+import javax.validation.constraints.Size;
+
+@Data
+public class RegisterRequestDTO {
+    @NotBlank(message = "Email is required")
+    @Email(message = "Email should be valid")
+    private String email;
+    
+    @NotBlank(message = "Password is required")
+    @Size(min = 8, message = "Password must be at least 8 characters")
+    private String password;
+}
+
+Step 3: Create Mapper Classes
+───────────────────────────────────────────────────────────────────
+
+File: mapper/ExpenseMapper.java
+────────────────────────────────────────────────────────────────────
+package com.Projectalpha.ExpenseTrackerApplication.mapper;
+
+import com.Projectalpha.ExpenseTrackerApplication.dto.*;
+import com.Projectalpha.ExpenseTrackerApplication.entity.*;
+import org.springframework.stereotype.Component;
+
+@Component
+public class ExpenseMapper {
+    
+    public ExpenseResponseDTO toResponseDTO(Expense expense) {
+        ExpenseResponseDTO dto = new ExpenseResponseDTO();
+        dto.setId(expense.getId());
+        dto.setUserEmail(expense.getUser().getEmail());
+        dto.setCategoryName(expense.getCategory().getName());
+        dto.setAmount(expense.getAmount());
+        dto.setDescription(expense.getDescription());
+        dto.setExpenseDate(expense.getExpenseDate());
+        dto.setCreatedAt(expense.getCreatedAt());
+        return dto;
+    }
+    
+    public Expense toEntity(ExpenseRequestDTO dto, User user, Category category) {
+        Expense expense = new Expense();
+        expense.setUser(user);
+        expense.setCategory(category);
+        expense.setAmount(dto.getAmount());
+        expense.setDescription(dto.getDescription());
+        expense.setExpenseDate(dto.getExpenseDate());
+        expense.setCreatedAt(LocalDateTime.now());
+        return expense;
+    }
+}
+
+Alternative: Use MapStruct for automatic mapping
+────────────────────────────────────────────────────────────────────
+Add dependency to pom.xml:
+<dependency>
+    <groupId>org.mapstruct</groupId>
+    <artifactId>mapstruct</artifactId>
+    <version>1.5.5.Final</version>
+</dependency>
+
+@Mapper(componentModel = "spring")
+public interface ExpenseMapper {
+    ExpenseResponseDTO toResponseDTO(Expense expense);
+    Expense toEntity(ExpenseRequestDTO dto);
+}
+
+Step 4: Update Controller to Use DTOs
+───────────────────────────────────────────────────────────────────
+
+File: Controller/ExpenseController.java (Updated)
+────────────────────────────────────────────────────────────────────
+@RestController
+@RequestMapping("/api/v1/expenses")
+public class ExpenseController {
+    
+    private final ExpenseService expenseService;
+    private final ExpenseMapper expenseMapper;
+    private final UserService userService;
+    private final CategoryRepository categoryRepository;
+    
+    @PostMapping
+    public ResponseEntity<ExpenseResponseDTO> addExpense(
+            @RequestBody ExpenseRequestDTO requestDTO,
+            Authentication authentication) {
+        
+        String email = authentication.getName();
+        User user = userService.getUserByEmail(email);
+        
+        Category category = categoryRepository.findById(requestDTO.getCategoryId())
+                .orElseThrow(() -> new ResourceNotFoundException("Category not found"));
+        
+        Expense expense = expenseMapper.toEntity(requestDTO, user, category);
+        Expense savedExpense = expenseService.addExpense(expense);
+        
+        ExpenseResponseDTO responseDTO = expenseMapper.toResponseDTO(savedExpense);
+        return ResponseEntity.status(HttpStatus.CREATED).body(responseDTO);
+    }
+    
+    @GetMapping
+    public ResponseEntity<List<ExpenseResponseDTO>> getMyExpenses(
+            Authentication authentication) {
+        
+        String email = authentication.getName();
+        User user = userService.getUserByEmail(email);
+        
+        List<Expense> expenses = expenseService.getExpensesByUser(user);
+        List<ExpenseResponseDTO> responseDTOs = expenses.stream()
+                .map(expenseMapper::toResponseDTO)
+                .collect(Collectors.toList());
+        
+        return ResponseEntity.ok(responseDTOs);
+    }
+}
+
+BENEFITS ACHIEVED
+────────────────────────────────────────────────────────────────────
+✓ Password field never exposed in responses
+✓ Cleaner API responses (no circular references)
+✓ API versioning support
+✓ Better performance (only necessary fields)
+✓ Easier to maintain and evolve
+
+================================================================================
+                    2. JWT (JSON WEB TOKEN) AUTHENTICATION
+================================================================================
+
+WHY USE JWT?
+────────────────────────────────────────────────────────────────────
+✓ Stateless authentication (no server-side sessions)
+✓ Scalable (works with load balancers)
+✓ Mobile-friendly
+✓ Cross-domain authentication
+✓ Self-contained (contains user info)
+
+IMPLEMENTATION STEPS
+────────────────────────────────────────────────────────────────────
+
+Step 1: Add Dependencies
+───────────────────────────────────────────────────────────────────
+
+Add to pom.xml:
+────────────────────────────────────────────────────────────────────
+<dependency>
+    <groupId>io.jsonwebtoken</groupId>
+    <artifactId>jjwt-api</artifactId>
+    <version>0.12.3</version>
+</dependency>
+<dependency>
+    <groupId>io.jsonwebtoken</groupId>
+    <artifactId>jjwt-impl</artifactId>
+    <version>0.12.3</version>
+    <scope>runtime</scope>
+</dependency>
+<dependency>
+    <groupId>io.jsonwebtoken</groupId>
+    <artifactId>jjwt-jackson</artifactId>
+    <version>0.12.3</version>
+    <scope>runtime</scope>
+</dependency>
+
+Step 2: Add JWT Properties
+───────────────────────────────────────────────────────────────────
+
+Add to application.properties:
+────────────────────────────────────────────────────────────────────
+jwt.secret=your-256-bit-secret-key-change-this-in-production
+jwt.expiration=86400000
+# 86400000 ms = 24 hours
+
+Step 3: Create JWT Utility Class
+───────────────────────────────────────────────────────────────────
+
+File: util/JwtUtil.java
+────────────────────────────────────────────────────────────────────
+package com.Projectalpha.ExpenseTrackerApplication.util;
+
+import io.jsonwebtoken.*;
+import io.jsonwebtoken.security.Keys;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.stereotype.Component;
+
+import javax.crypto.SecretKey;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.function.Function;
+
+@Component
+public class JwtUtil {
+    
+    @Value("${jwt.secret}")
+    private String secret;
+    
+    @Value("${jwt.expiration}")
+    private Long expiration;
+    
+    private SecretKey getSigningKey() {
+        return Keys.hmacShaKeyFor(secret.getBytes());
+    }
+    
+    public String extractUsername(String token) {
+        return extractClaim(token, Claims::getSubject);
+    }
+    
+    public Date extractExpiration(String token) {
+        return extractClaim(token, Claims::getExpiration);
+    }
+    
+    public <T> T extractClaim(String token, Function<Claims, T> claimsResolver) {
+        final Claims claims = extractAllClaims(token);
+        return claimsResolver.apply(claims);
+    }
+    
+    private Claims extractAllClaims(String token) {
+        return Jwts.parser()
+                .verifyWith(getSigningKey())
+                .build()
+                .parseSignedClaims(token)
+                .getPayload();
+    }
+    
+    private Boolean isTokenExpired(String token) {
+        return extractExpiration(token).before(new Date());
+    }
+    
+    public String generateToken(UserDetails userDetails) {
+        Map<String, Object> claims = new HashMap<>();
+        return createToken(claims, userDetails.getUsername());
+    }
+    
+    private String createToken(Map<String, Object> claims, String subject) {
+        return Jwts.builder()
+                .claims(claims)
+                .subject(subject)
+                .issuedAt(new Date(System.currentTimeMillis()))
+                .expiration(new Date(System.currentTimeMillis() + expiration))
+                .signWith(getSigningKey())
+                .compact();
+    }
+    
+    public Boolean validateToken(String token, UserDetails userDetails) {
+        final String username = extractUsername(token);
+        return (username.equals(userDetails.getUsername()) && !isTokenExpired(token));
+    }
+}
+
+Step 4: Create JWT Authentication Filter
+───────────────────────────────────────────────────────────────────
+
+File: filter/JwtAuthenticationFilter.java
+────────────────────────────────────────────────────────────────────
+package com.Projectalpha.ExpenseTrackerApplication.filter;
+
+import com.Projectalpha.ExpenseTrackerApplication.service.CustomUserDetailsService;
+import com.Projectalpha.ExpenseTrackerApplication.util.JwtUtil;
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
+import org.springframework.stereotype.Component;
+import org.springframework.web.filter.OncePerRequestFilter;
+
+import java.io.IOException;
+
+@Component
+public class JwtAuthenticationFilter extends OncePerRequestFilter {
+    
+    private final JwtUtil jwtUtil;
+    private final CustomUserDetailsService userDetailsService;
+    
+    public JwtAuthenticationFilter(JwtUtil jwtUtil, 
+                                   CustomUserDetailsService userDetailsService) {
+        this.jwtUtil = jwtUtil;
+        this.userDetailsService = userDetailsService;
+    }
+    
+    @Override
+    protected void doFilterInternal(HttpServletRequest request,
+                                    HttpServletResponse response,
+                                    FilterChain filterChain) 
+            throws ServletException, IOException {
+        
+        final String authorizationHeader = request.getHeader("Authorization");
+        
+        String username = null;
+        String jwt = null;
+        
+        if (authorizationHeader != null && authorizationHeader.startsWith("Bearer ")) {
+            jwt = authorizationHeader.substring(7);
+            username = jwtUtil.extractUsername(jwt);
+        }
+        
+        if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
+            UserDetails userDetails = userDetailsService.loadUserByUsername(username);
+            
+            if (jwtUtil.validateToken(jwt, userDetails)) {
+                UsernamePasswordAuthenticationToken authToken = 
+                    new UsernamePasswordAuthenticationToken(
+                        userDetails, null, userDetails.getAuthorities());
+                authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+                SecurityContextHolder.getContext().setAuthentication(authToken);
+            }
+        }
+        
+        filterChain.doFilter(request, response);
+    }
+}
+
+Step 5: Create Authentication Controller
+───────────────────────────────────────────────────────────────────
+
+File: Controller/AuthController.java
+────────────────────────────────────────────────────────────────────
+package com.Projectalpha.ExpenseTrackerApplication.Controller;
+
+import com.Projectalpha.ExpenseTrackerApplication.dto.*;
+import com.Projectalpha.ExpenseTrackerApplication.util.JwtUtil;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.authentication.*;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.web.bind.annotation.*;
+
+@RestController
+@RequestMapping("/api/v1/auth")
+public class AuthController {
+    
+    private final AuthenticationManager authenticationManager;
+    private final UserDetailsService userDetailsService;
+    private final JwtUtil jwtUtil;
+    
+    public AuthController(AuthenticationManager authenticationManager,
+                         UserDetailsService userDetailsService,
+                         JwtUtil jwtUtil) {
+        this.authenticationManager = authenticationManager;
+        this.userDetailsService = userDetailsService;
+        this.jwtUtil = jwtUtil;
+    }
+    
+    @PostMapping("/login")
+    public ResponseEntity<AuthResponseDTO> login(@RequestBody LoginRequestDTO request) {
+        try {
+            authenticationManager.authenticate(
+                new UsernamePasswordAuthenticationToken(
+                    request.getEmail(), request.getPassword())
+            );
+        } catch (BadCredentialsException e) {
+            throw new RuntimeException("Invalid credentials");
+        }
+        
+        final UserDetails userDetails = userDetailsService.loadUserByUsername(request.getEmail());
+        final String jwt = jwtUtil.generateToken(userDetails);
+        
+        AuthResponseDTO response = new AuthResponseDTO();
+        response.setToken(jwt);
+        response.setEmail(userDetails.getUsername());
+        
+        return ResponseEntity.ok(response);
+    }
+}
+
+File: dto/LoginRequestDTO.java
+────────────────────────────────────────────────────────────────────
+@Data
+public class LoginRequestDTO {
+    private String email;
+    private String password;
+}
+
+File: dto/AuthResponseDTO.java
+────────────────────────────────────────────────────────────────────
+@Data
+public class AuthResponseDTO {
+    private String token;
+    private String email;
+}
+
+Step 6: Update Security Configuration
+───────────────────────────────────────────────────────────────────
+
+File: config/SecurityConfig.java (Updated)
+────────────────────────────────────────────────────────────────────
+@Configuration
+@EnableWebSecurity
+public class SecurityConfig {
+    
+    private final JwtAuthenticationFilter jwtAuthFilter;
+    private final CustomUserDetailsService userDetailsService;
+    
+    public SecurityConfig(JwtAuthenticationFilter jwtAuthFilter,
+                         CustomUserDetailsService userDetailsService) {
+        this.jwtAuthFilter = jwtAuthFilter;
+        this.userDetailsService = userDetailsService;
+    }
+    
+    @Bean
+    SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+        http
+            .csrf(csrf -> csrf.disable())
+            .authorizeHttpRequests(auth -> auth
+                .requestMatchers("/api/v1/auth/**").permitAll()
+                .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
+                .requestMatchers("/api/v1/expenses/**").hasRole("USER")
+                .anyRequest().authenticated()
+            )
+            .sessionManagement(session -> session
+                .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
+            )
+            .authenticationProvider(authenticationProvider())
+            .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
+        
+        return http.build();
+    }
+    
+    @Bean
+    public AuthenticationProvider authenticationProvider() {
+        DaoAuthenticationProvider authProvider = new DaoAuthenticationProvider();
+        authProvider.setUserDetailsService(userDetailsService);
+        authProvider.setPasswordEncoder(passwordEncoder());
+        return authProvider;
+    }
+    
+    @Bean
+    public AuthenticationManager authenticationManager(AuthenticationConfiguration config) 
+            throws Exception {
+        return config.getAuthenticationManager();
+    }
+    
+    @Bean
+    public PasswordEncoder passwordEncoder() {
+        return new BCryptPasswordEncoder();
+    }
+}
+
+Step 7: Test JWT Authentication
+───────────────────────────────────────────────────────────────────
+
+1. Login to get token:
+POST http://localhost:8080/api/v1/auth/login
+{
+  "email": "user@example.com",
+  "password": "password123"
+}
+
+Response:
+{
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "email": "user@example.com"
+}
+
+2. Use token in subsequent requests:
+GET http://localhost:8080/api/v1/expenses
+Headers:
+  Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+
+BENEFITS ACHIEVED
+────────────────────────────────────────────────────────────────────
+✓ Stateless authentication
+✓ Scalable across multiple servers
+✓ Mobile app friendly
+✓ Token-based security
+✓ No server-side session storage
+
+================================================================================
+                    3. OAUTH2 SOCIAL LOGIN INTEGRATION
+================================================================================
+
+WHY USE OAUTH2?
+────────────────────────────────────────────────────────────────────
+✓ Easy user registration/login
+✓ No password management
+✓ Trusted authentication providers
+✓ Better user experience
+✓ Reduced security risks
+
+IMPLEMENTATION STEPS
+────────────────────────────────────────────────────────────────────
+
+Step 1: Add OAuth2 Dependency
+───────────────────────────────────────────────────────────────────
+
+Add to pom.xml:
+────────────────────────────────────────────────────────────────────
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-oauth2-client</artifactId>
+</dependency>
+
+Step 2: Configure OAuth2 Providers
+───────────────────────────────────────────────────────────────────
+
+Add to application.properties:
+────────────────────────────────────────────────────────────────────
+# Google OAuth2
+spring.security.oauth2.client.registration.google.client-id=YOUR_GOOGLE_CLIENT_ID
+spring.security.oauth2.client.registration.google.client-secret=YOUR_GOOGLE_CLIENT_SECRET
+spring.security.oauth2.client.registration.google.scope=profile,email
+
+# GitHub OAuth2
+spring.security.oauth2.client.registration.github.client-id=YOUR_GITHUB_CLIENT_ID
+spring.security.oauth2.client.registration.github.client-secret=YOUR_GITHUB_CLIENT_SECRET
+spring.security.oauth2.client.registration.github.scope=user:email
+
+Step 3: Get OAuth2 Credentials
+───────────────────────────────────────────────────────────────────
+
+For Google:
+1. Go to https://console.cloud.google.com/
+2. Create a new project
+3. Enable Google+ API
+4. Create OAuth 2.0 credentials
+5. Add authorized redirect URI: http://localhost:8080/login/oauth2/code/google
+
+For GitHub:
+1. Go to https://github.com/settings/developers
+2. Create new OAuth App
+3. Set Authorization callback URL: http://localhost:8080/login/oauth2/code/github
+
+Step 4: Update Security Configuration
+───────────────────────────────────────────────────────────────────
+
+File: config/SecurityConfig.java (Updated)
+────────────────────────────────────────────────────────────────────
+@Bean
+SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    http
+        .csrf(csrf -> csrf.disable())
+        .authorizeHttpRequests(auth -> auth
+            .requestMatchers("/api/v1/auth/**", "/login/**", "/oauth2/**").permitAll()
+            .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
+            .requestMatchers("/api/v1/expenses/**").hasRole("USER")
+            .anyRequest().authenticated()
+        )
+        .oauth2Login(oauth2 -> oauth2
+            .loginPage("/login")
+            .defaultSuccessUrl("/api/v1/auth/oauth2/success", true)
+            .failureUrl("/login?error=true")
+            .userInfoEndpoint(userInfo -> userInfo
+                .userService(customOAuth2UserService)
+            )
+        )
+        .sessionManagement(session -> session
+            .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
+        );
+    
+    return http.build();
+}
+
+Step 5: Create Custom OAuth2 User Service
+───────────────────────────────────────────────────────────────────
+
+File: service/CustomOAuth2UserService.java
+────────────────────────────────────────────────────────────────────
+package com.Projectalpha.ExpenseTrackerApplication.service;
+
+import com.Projectalpha.ExpenseTrackerApplication.entity.User;
+import com.Projectalpha.ExpenseTrackerApplication.repository.UserRepository;
+import org.springframework.security.oauth2.client.userinfo.DefaultOAuth2UserService;
+import org.springframework.security.oauth2.client.userinfo.OAuth2UserRequest;
+import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
+import org.springframework.security.oauth2.core.user.OAuth2User;
+import org.springframework.stereotype.Service;
+
+@Service
+public class CustomOAuth2UserService extends DefaultOAuth2UserService {
+    
+    private final UserRepository userRepository;
+    
+    public CustomOAuth2UserService(UserRepository userRepository) {
+        this.userRepository = userRepository;
+    }
+    
+    @Override
+    public OAuth2User loadUser(OAuth2UserRequest userRequest) 
+            throws OAuth2AuthenticationException {
+        
+        OAuth2User oauth2User = super.loadUser(userRequest);
+        
+        String email = oauth2User.getAttribute("email");
+        String name = oauth2User.getAttribute("name");
+        
+        // Check if user exists, if not create new user
+        User user = userRepository.findByEmail(email)
+                .orElseGet(() -> {
+                    User newUser = new User();
+                    newUser.setEmail(email);
+                    // Set a random password (won't be used for OAuth2 login)
+                    newUser.setPassword(UUID.randomUUID().toString());
+                    // Set default role
+                    // newUser.setRole(...);
+                    return userRepository.save(newUser);
+                });
+        
+        return oauth2User;
+    }
+}
+
+Step 6: Create OAuth2 Success Handler
+───────────────────────────────────────────────────────────────────
+
+File: Controller/AuthController.java (Add method)
+────────────────────────────────────────────────────────────────────
+@GetMapping("/oauth2/success")
+public ResponseEntity<AuthResponseDTO> oauth2Success(
+        @AuthenticationPrincipal OAuth2User oauth2User) {
+    
+    String email = oauth2User.getAttribute("email");
+    UserDetails userDetails = userDetailsService.loadUserByUsername(email);
+    String jwt = jwtUtil.generateToken(userDetails);
+    
+    AuthResponseDTO response = new AuthResponseDTO();
+    response.setToken(jwt);
+    response.setEmail(email);
+    
+    return ResponseEntity.ok(response);
+}
+
+TESTING OAUTH2
+────────────────────────────────────────────────────────────────────
+1. Navigate to: http://localhost:8080/oauth2/authorization/google
+2. Login with Google account
+3. Redirected to success endpoint with JWT token
+4. Use token for subsequent API calls
+
+================================================================================
+                    4. GLOBAL EXCEPTION HANDLING
+================================================================================
+
+IMPLEMENTATION
+────────────────────────────────────────────────────────────────────
+
+File: exception/ResourceNotFoundException.java
+────────────────────────────────────────────────────────────────────
+package com.Projectalpha.ExpenseTrackerApplication.exception;
+
+public class ResourceNotFoundException extends RuntimeException {
+    public ResourceNotFoundException(String message) {
+        super(message);
+    }
+}
+
+File: exception/UnauthorizedException.java
+────────────────────────────────────────────────────────────────────
+public class UnauthorizedException extends RuntimeException {
+    public UnauthorizedException(String message) {
+        super(message);
+    }
+}
+
+File: exception/GlobalExceptionHandler.java
+────────────────────────────────────────────────────────────────────
+package com.Projectalpha.ExpenseTrackerApplication.exception;
+
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+import org.springframework.web.context.request.WebRequest;
+
+import java.time.LocalDateTime;
+import java.util.HashMap;
+import java.util.Map;
+
+@ControllerAdvice
+public class GlobalExceptionHandler {
+    
+    @ExceptionHandler(ResourceNotFoundException.class)
+    public ResponseEntity<Map<String, Object>> handleResourceNotFound(
+            ResourceNotFoundException ex, WebRequest request) {
+        
+        Map<String, Object> body = new HashMap<>();
+        body.put("timestamp", LocalDateTime.now());
+        body.put("status", HttpStatus.NOT_FOUND.value());
+        body.put("error", "Not Found");
+        body.put("message", ex.getMessage());
+        body.put("path", request.getDescription(false).replace("uri=", ""));
+        
+        return new ResponseEntity<>(body, HttpStatus.NOT_FOUND);
+    }
+    
+    @ExceptionHandler(UnauthorizedException.class)
+    public ResponseEntity<Map<String, Object>> handleUnauthorized(
+            UnauthorizedException ex, WebRequest request) {
+        
+        Map<String, Object> body = new HashMap<>();
+        body.put("timestamp", LocalDateTime.now());
+        body.put("status", HttpStatus.FORBIDDEN.value());
+        body.put("error", "Forbidden");
+        body.put("message", ex.getMessage());
+        body.put("path", request.getDescription(false).replace("uri=", ""));
+        
+        return new ResponseEntity<>(body, HttpStatus.FORBIDDEN);
+    }
+    
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<Map<String, Object>> handleGlobalException(
+            Exception ex, WebRequest request) {
+        
+        Map<String, Object> body = new HashMap<>();
+        body.put("timestamp", LocalDateTime.now());
+        body.put("status", HttpStatus.INTERNAL_SERVER_ERROR.value());
+        body.put("error", "Internal Server Error");
+        body.put("message", ex.getMessage());
+        body.put("path", request.getDescription(false).replace("uri=", ""));
+        
+        return new ResponseEntity<>(body, HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+}
+
+USAGE IN SERVICE
+────────────────────────────────────────────────────────────────────
+public void deleteExpense(Long expenseId, User user) {
+    Expense expense = expenseRepository
+            .findByIdAndUser(expenseId, user)
+            .orElseThrow(() -> 
+                new ResourceNotFoundException("Expense not found with id: " + expenseId)
+            );
+    
+    expenseRepository.delete(expense);
+}
+
+================================================================================
+                    5. INPUT VALIDATION
+================================================================================
+
+Step 1: Add Validation Dependency
+───────────────────────────────────────────────────────────────────
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-validation</artifactId>
+</dependency>
+
+Step 2: Add Validation Annotations to DTOs
+───────────────────────────────────────────────────────────────────
+
+File: dto/ExpenseRequestDTO.java (Updated)
+────────────────────────────────────────────────────────────────────
+@Data
+public class ExpenseRequestDTO {
+    
+    @NotNull(message = "Category ID is required")
+    private Long categoryId;
+    
+    @NotNull(message = "Amount is required")
+    @DecimalMin(value = "0.01", message = "Amount must be greater than 0")
+    @Digits(integer = 10, fraction = 2, message = "Amount format invalid")
+    private BigDecimal amount;
+    
+    @Size(max = 255, message = "Description cannot exceed 255 characters")
+    private String description;
+    
+    @NotNull(message = "Expense date is required")
+    @PastOrPresent(message = "Expense date cannot be in the future")
+    private LocalDate expenseDate;
+}
+
+Step 3: Use @Valid in Controller
+───────────────────────────────────────────────────────────────────
+@PostMapping
+public ResponseEntity<ExpenseResponseDTO> addExpense(
+        @Valid @RequestBody ExpenseRequestDTO requestDTO,
+        Authentication authentication) {
+    // Implementation
+}
+
+Step 4: Handle Validation Errors
+───────────────────────────────────────────────────────────────────
+
+Add to GlobalExceptionHandler:
+────────────────────────────────────────────────────────────────────
+@ExceptionHandler(MethodArgumentNotValidException.class)
+public ResponseEntity<Map<String, Object>> handleValidationErrors(
+        MethodArgumentNotValidException ex) {
+    
+    Map<String, String> errors = new HashMap<>();
+    ex.getBindingResult().getFieldErrors().forEach(error -> 
+        errors.put(error.getField(), error.getDefaultMessage())
+    );
+    
+    Map<String, Object> body = new HashMap<>();
+    body.put("timestamp", LocalDateTime.now());
+    body.put("status", HttpStatus.BAD_REQUEST.value());
+    body.put("error", "Validation Failed");
+    body.put("errors", errors);
+    
+    return new ResponseEntity<>(body, HttpStatus.BAD_REQUEST);
+}
+
+================================================================================
+                    ADDITIONAL IMPLEMENTATIONS
+================================================================================
+
+6. API VERSIONING
+────────────────────────────────────────────────────────────────────
+Update all @RequestMapping to include version:
+@RequestMapping("/api/v1/expenses")
+
+7. PAGINATION
+────────────────────────────────────────────────────────────────────
+@GetMapping
+public Page<ExpenseResponseDTO> getExpenses(
+        @RequestParam(defaultValue = "0") int page,
+        @RequestParam(defaultValue = "10") int size,
+        Authentication authentication) {
+    
+    Pageable pageable = PageRequest.of(page, size);
+    // Use repository.findByUser(user, pageable)
+}
+
+8. CACHING WITH REDIS
+────────────────────────────────────────────────────────────────────
+Add dependency:
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-data-redis</artifactId>
+</dependency>
+
+@Cacheable(value = "expenses", key = "#user.id")
+public List<Expense> getExpensesByUser(User user) {
+    return expenseRepository.findByUser(user);
+}
+
+9. SWAGGER API DOCUMENTATION
+────────────────────────────────────────────────────────────────────
+Add dependency:
+<dependency>
+    <groupId>org.springdoc</groupId>
+    <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+    <version>2.2.0</version>
+</dependency>
+
+Access at: http://localhost:8080/swagger-ui.html
+
+10. CORS CONFIGURATION
+────────────────────────────────────────────────────────────────────
+@Bean
+public CorsConfigurationSource corsConfigurationSource() {
+    CorsConfiguration configuration = new CorsConfiguration();
+    configuration.setAllowedOrigins(Arrays.asList("http://localhost:3000"));
+    configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE"));
+    configuration.setAllowedHeaders(Arrays.asList("*"));
+    configuration.setAllowCredentials(true);
+    
+    UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+    source.registerCorsConfiguration("/**", configuration);
+    return source;
+}
+
+================================================================================
+                              END OF GUIDE
+================================================================================

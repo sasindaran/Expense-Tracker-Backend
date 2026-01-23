@@ -1,0 +1,1175 @@
+================================================================================
+                    EXPENSE TRACKER APPLICATION - SYSTEM DESIGN
+================================================================================
+
+Project: Expense Tracker Backend
+Framework: Spring Boot 3.5.9
+Language: Java 21
+Database: MySQL
+Architecture: Layered (MVC + Service Layer)
+
+================================================================================
+                              TABLE OF CONTENTS
+================================================================================
+1. System Overview
+2. Architecture Pattern
+3. Technology Stack
+4. Database Design
+5. Application Layers
+6. Security Architecture
+7. API Design
+8. Data Flow
+9. Component Interactions
+10. Design Patterns
+11. Scalability Considerations
+12. Future Enhancements
+
+================================================================================
+                           1. SYSTEM OVERVIEW
+================================================================================
+
+Purpose:
+  The Expense Tracker is a backend application designed to help users manage
+  their personal expenses. It provides RESTful APIs for creating, retrieving,
+  and deleting expense records with secure user authentication.
+
+Key Features:
+  - User authentication and authorization
+  - Role-based access control (USER, ADMIN)
+  - Expense CRUD operations
+  - Category-based expense organization
+  - User-specific data isolation
+  - Secure password encryption
+
+Target Users:
+  - Individual users tracking personal expenses
+  - Administrators managing the system
+
+Business Goals:
+  - Provide secure expense tracking
+  - Ensure data privacy and isolation
+  - Enable easy expense categorization
+  - Support future analytics and reporting
+
+================================================================================
+                         2. ARCHITECTURE PATTERN
+================================================================================
+
+Primary Pattern: Layered Architecture (N-Tier)
+
+┌─────────────────────────────────────────────────────────────────┐
+│                        PRESENTATION LAYER                        │
+│                     (REST Controllers)                           │
+│  - ExpenseController                                             │
+│  - Handles HTTP requests/responses                               │
+│  - Input validation                                              │
+│  - Response formatting                                           │
+└─────────────────────────────────────────────────────────────────┘
+                              ↓ ↑
+┌─────────────────────────────────────────────────────────────────┐
+│                         SECURITY LAYER                           │
+│                   (Spring Security)                              │
+│  - SecurityConfig                                                │
+│  - CustomUserDetailsService                                      │
+│  - Authentication & Authorization                                │
+│  - BCrypt Password Encoding                                      │
+└─────────────────────────────────────────────────────────────────┘
+                              ↓ ↑
+┌─────────────────────────────────────────────────────────────────┐
+│                         BUSINESS LAYER                           │
+│                      (Service Layer)                             │
+│  - ExpenseService                                                │
+│  - UserService                                                   │
+│  - Business logic implementation                                 │
+│  - Transaction management                                        │
+│  - Data validation                                               │
+└─────────────────────────────────────────────────────────────────┘
+                              ↓ ↑
+┌─────────────────────────────────────────────────────────────────┐
+│                       PERSISTENCE LAYER                          │
+│                    (Repository Layer)                            │
+│  - ExpenseRepository                                             │
+│  - UserRepository                                                │
+│  - RoleRepository                                                │
+│  - Data access abstraction                                       │
+│  - JPA query methods                                             │
+└─────────────────────────────────────────────────────────────────┘
+                              ↓ ↑
+┌─────────────────────────────────────────────────────────────────┐
+│                          DATA LAYER                              │
+│                      (MySQL Database)                            │
+│  - users table                                                   │
+│  - roles table                                                   │
+│  - expenses table                                                │
+│  - categories table                                              │
+└─────────────────────────────────────────────────────────────────┘
+
+Benefits of Layered Architecture:
+  ✓ Separation of Concerns
+  ✓ Easy to maintain and test
+  ✓ Clear dependency flow
+  ✓ Reusable components
+  ✓ Scalable structure
+
+================================================================================
+                          3. TECHNOLOGY STACK
+================================================================================
+
+Backend Framework:
+  ┌──────────────────────────────────────────────────────────────┐
+  │ Spring Boot 3.5.9                                            │
+  │ - Spring Web (REST APIs)                                     │
+  │ - Spring Security (Authentication & Authorization)           │
+  │ - Spring Data JPA (ORM)                                      │
+  │ - Spring Boot DevTools (Development)                         │
+  └──────────────────────────────────────────────────────────────┘
+
+Database:
+  ┌──────────────────────────────────────────────────────────────┐
+  │ MySQL                                                        │
+  │ - Relational database                                        │
+  │ - ACID compliance                                            │
+  │ - Connection: localhost:3306/expense_tracker                 │
+  └──────────────────────────────────────────────────────────────┘
+
+ORM:
+  ┌──────────────────────────────────────────────────────────────┐
+  │ Hibernate (via Spring Data JPA)                              │
+  │ - Entity mapping                                             │
+  │ - Automatic schema generation                                │
+  │ - Query generation                                           │
+  └──────────────────────────────────────────────────────────────┘
+
+Build Tool:
+  ┌──────────────────────────────────────────────────────────────┐
+  │ Maven                                                        │
+  │ - Dependency management                                      │
+  │ - Build lifecycle                                            │
+  │ - Plugin management                                          │
+  └──────────────────────────────────────────────────────────────┘
+
+Additional Libraries:
+  ┌──────────────────────────────────────────────────────────────┐
+  │ Lombok                                                       │
+  │ - Reduces boilerplate code                                   │
+  │ - @Getter, @Setter, @NoArgsConstructor, @AllArgsConstructor  │
+  └──────────────────────────────────────────────────────────────┘
+
+Security:
+  ┌──────────────────────────────────────────────────────────────┐
+  │ BCrypt Password Encoder                                      │
+  │ - Secure password hashing                                    │
+  │ - Salt generation                                            │
+  │ - One-way encryption                                         │
+  └──────────────────────────────────────────────────────────────┘
+
+================================================================================
+                           4. DATABASE DESIGN
+================================================================================
+
+Database Schema (3NF Normalized):
+
+┌─────────────────────────────────────────────────────────────────┐
+│                         ROLES TABLE                              │
+├─────────────────────────────────────────────────────────────────┤
+│ PK  id           BIGINT AUTO_INCREMENT                           │
+│     name         VARCHAR(20) UNIQUE NOT NULL                     │
+│                                                                  │
+│ Sample Data:                                                     │
+│   1, 'USER'                                                      │
+│   2, 'ADMIN'                                                     │
+└─────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────┐
+│                         USERS TABLE                              │
+├─────────────────────────────────────────────────────────────────┤
+│ PK  id           BIGINT AUTO_INCREMENT                           │
+│     email        VARCHAR(100) UNIQUE NOT NULL                    │
+│     password     VARCHAR(255) NOT NULL (BCrypt encoded)          │
+│ FK  role_id      BIGINT NOT NULL → roles.id                      │
+│     created_at   DATETIME                                        │
+│                                                                  │
+│ Indexes:                                                         │
+│   - PRIMARY KEY (id)                                             │
+│   - UNIQUE INDEX (email)                                         │
+│   - FOREIGN KEY (role_id) REFERENCES roles(id)                   │
+└─────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────┐
+│                       CATEGORIES TABLE                           │
+├─────────────────────────────────────────────────────────────────┤
+│ PK  id           BIGINT AUTO_INCREMENT                           │
+│     name         VARCHAR(255) UNIQUE NOT NULL                    │
+│     type         VARCHAR(30) NOT NULL                            │
+│                                                                  │
+│ Sample Data:                                                     │
+│   1, 'Groceries', 'EXPENSE'                                      │
+│   2, 'Transportation', 'EXPENSE'                                 │
+│   3, 'Entertainment', 'EXPENSE'                                  │
+│   4, 'Utilities', 'EXPENSE'                                      │
+│   5, 'Healthcare', 'EXPENSE'                                     │
+│                                                                  │
+│ Indexes:                                                         │
+│   - PRIMARY KEY (id)                                             │
+│   - UNIQUE INDEX (name)                                          │
+└─────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────┐
+│                        EXPENSES TABLE                            │
+├─────────────────────────────────────────────────────────────────┤
+│ PK  id              BIGINT AUTO_INCREMENT                        │
+│ FK  user_id         BIGINT NOT NULL → users.id                   │
+│ FK  category_id     BIGINT NOT NULL → categories.id              │
+│     amount          DECIMAL(10,2) NOT NULL                       │
+│     description     VARCHAR(255)                                 │
+│     expense_date    DATE NOT NULL                                │
+│     created_at      DATETIME                                     │
+│                                                                  │
+│ Indexes:                                                         │
+│   - PRIMARY KEY (id)                                             │
+│   - FOREIGN KEY (user_id) REFERENCES users(id)                   │
+│   - FOREIGN KEY (category_id) REFERENCES categories(id)          │
+│   - INDEX (user_id) for faster user-based queries                │
+│   - INDEX (expense_date) for date-range queries                  │
+└─────────────────────────────────────────────────────────────────┘
+
+Entity Relationships:
+
+  roles (1) ──────< (N) users
+                         │
+                         │ (1)
+                         │
+                         ↓
+                      (N) expenses (N) >────── (1) categories
+
+Relationship Details:
+  - One Role can have Many Users (1:N)
+  - One User can have Many Expenses (1:N)
+  - One Category can be used in Many Expenses (1:N)
+  - Each Expense belongs to exactly One User (N:1)
+  - Each Expense belongs to exactly One Category (N:1)
+
+Data Integrity Constraints:
+  ✓ Primary Keys: Auto-increment for all tables
+  ✓ Foreign Keys: Enforce referential integrity
+  ✓ Unique Constraints: email, role name, category name
+  ✓ Not Null Constraints: Essential fields
+  ✓ Cascading: Consider ON DELETE behavior
+
+================================================================================
+                         5. APPLICATION LAYERS
+================================================================================
+
+5.1 ENTITY LAYER (Domain Models)
+────────────────────────────────────────────────────────────────────
+
+Location: com.Projectalpha.ExpenseTrackerApplication.entity
+
+┌─────────────────────────────────────────────────────────────────┐
+│ Role.java                                                        │
+├─────────────────────────────────────────────────────────────────┤
+│ @Entity                                                          │
+│ @Table(name = "roles")                                           │
+│                                                                  │
+│ Fields:                                                          │
+│   - Long id                                                      │
+│   - String name                                                  │
+│                                                                  │
+│ Annotations:                                                     │
+│   - @Id, @GeneratedValue                                         │
+│   - @Column(nullable = false, unique = true)                     │
+│   - @Getter, @Setter, @NoArgsConstructor, @AllArgsConstructor    │
+└─────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────┐
+│ User.java                                                        │
+├─────────────────────────────────────────────────────────────────┤
+│ @Entity                                                          │
+│ @Table(name = "users")                                           │
+│                                                                  │
+│ Fields:                                                          │
+│   - Long id                                                      │
+│   - String email                                                 │
+│   - String password (BCrypt encoded)                             │
+│   - Role role                                                    │
+│   - LocalDateTime createdAt                                      │
+│                                                                  │
+│ Relationships:                                                   │
+│   - @ManyToOne with Role                                         │
+│                                                                  │
+│ Annotations:                                                     │
+│   - @Id, @GeneratedValue                                         │
+│   - @Column(nullable = false, unique = true)                     │
+│   - @ManyToOne, @JoinColumn(name = "role_id")                    │
+└─────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────┐
+│ Category.java                                                    │
+├─────────────────────────────────────────────────────────────────┤
+│ @Entity                                                          │
+│ @Table(name = "categories")                                      │
+│                                                                  │
+│ Fields:                                                          │
+│   - Long id                                                      │
+│   - String name                                                  │
+│   - String type                                                  │
+│                                                                  │
+│ Annotations:                                                     │
+│   - @Id, @GeneratedValue                                         │
+│   - @Column(nullable = false, unique = true)                     │
+└─────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────┐
+│ Expense.java                                                     │
+├─────────────────────────────────────────────────────────────────┤
+│ @Entity                                                          │
+│ @Table(name = "expense")                                         │
+│                                                                  │
+│ Fields:                                                          │
+│   - Long id                                                      │
+│   - User user                                                    │
+│   - Category category                                            │
+│   - BigDecimal amount                                            │
+│   - String description                                           │
+│   - LocalDate expenseDate                                        │
+│   - LocalDateTime createdAt                                      │
+│                                                                  │
+│ Relationships:                                                   │
+│   - @ManyToOne with User                                         │
+│   - @ManyToOne with Category                                     │
+│                                                                  │
+│ Annotations:                                                     │
+│   - @Column(nullable = false, precision = 10, scale = 2)         │
+│   - @ManyToOne(optional = false)                                 │
+└─────────────────────────────────────────────────────────────────┘
+
+5.2 REPOSITORY LAYER (Data Access)
+────────────────────────────────────────────────────────────────────
+
+Location: com.Projectalpha.ExpenseTrackerApplication.repository
+
+┌─────────────────────────────────────────────────────────────────┐
+│ ExpenseRepository.java                                           │
+├─────────────────────────────────────────────────────────────────┤
+│ extends JpaRepository<Expense, Long>                             │
+│                                                                  │
+│ Custom Methods:                                                  │
+│   - List<Expense> findByUser(User user)                          │
+│   - Optional<Expense> findByIdAndUser(Long id, User user)        │
+│                                                                  │
+│ Inherited Methods (from JpaRepository):                          │
+│   - save(), findById(), findAll(), delete(), count(), etc.       │
+│                                                                  │
+│ Query Generation:                                                │
+│   Spring Data JPA automatically generates queries based on       │
+│   method names using naming conventions                          │
+└─────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────┐
+│ UserRepository.java                                              │
+├─────────────────────────────────────────────────────────────────┤
+│ extends JpaRepository<User, Long>                                │
+│                                                                  │
+│ Custom Methods:                                                  │
+│   - Optional<User> findByEmail(String email)                     │
+│                                                                  │
+│ Purpose:                                                         │
+│   Used for authentication and user lookup                        │
+└─────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────┐
+│ RoleRepository.java                                              │
+├─────────────────────────────────────────────────────────────────┤
+│ extends JpaRepository<Role, Long>                                │
+│                                                                  │
+│ Purpose:                                                         │
+│   Manages role data (USER, ADMIN)                                │
+└─────────────────────────────────────────────────────────────────┘
+
+5.3 SERVICE LAYER (Business Logic)
+────────────────────────────────────────────────────────────────────
+
+Location: com.Projectalpha.ExpenseTrackerApplication.service
+
+┌─────────────────────────────────────────────────────────────────┐
+│ ExpenseService.java                                              │
+├─────────────────────────────────────────────────────────────────┤
+│ @Service                                                         │
+│                                                                  │
+│ Dependencies:                                                    │
+│   - ExpenseRepository (injected via constructor)                 │
+│                                                                  │
+│ Methods:                                                         │
+│                                                                  │
+│   addExpense(Expense expense): Expense                           │
+│     - Saves new expense to database                              │
+│     - Returns saved expense with generated ID                    │
+│                                                                  │
+│   getExpensesByUser(User user): List<Expense>                    │
+│     - Retrieves all expenses for specific user                   │
+│     - Ensures data isolation                                     │
+│                                                                  │
+│   deleteExpense(Long expenseId, User user): void                 │
+│     - Validates expense belongs to user                          │
+│     - Throws exception if not found or access denied             │
+│     - Deletes expense from database                              │
+│                                                                  │
+│ Business Rules:                                                  │
+│   ✓ Users can only access their own expenses                     │
+│   ✓ Validation before deletion                                   │
+│   ✓ Exception handling for unauthorized access                   │
+└─────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────┐
+│ UserService.java                                                 │
+├─────────────────────────────────────────────────────────────────┤
+│ @Service                                                         │
+│                                                                  │
+│ Dependencies:                                                    │
+│   - UserRepository (injected via constructor)                    │
+│                                                                  │
+│ Methods:                                                         │
+│   - getUserByEmail(String email): User                           │
+│   - Additional user management methods                           │
+└─────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────┐
+│ CustomUserDetailsService.java                                    │
+├─────────────────────────────────────────────────────────────────┤
+│ @Service                                                         │
+│ implements UserDetailsService                                    │
+│                                                                  │
+│ Dependencies:                                                    │
+│   - UserRepository (injected via constructor)                    │
+│                                                                  │
+│ Methods:                                                         │
+│   loadUserByUsername(String username): UserDetails               │
+│     - Loads user by email (username)                             │
+│     - Converts User entity to Spring Security UserDetails        │
+│     - Includes roles for authorization                           │
+│     - Throws UsernameNotFoundException if not found              │
+│                                                                  │
+│ Purpose:                                                         │
+│   Integrates custom user authentication with Spring Security     │
+└─────────────────────────────────────────────────────────────────┘
+
+5.4 CONTROLLER LAYER (REST APIs)
+────────────────────────────────────────────────────────────────────
+
+Location: com.Projectalpha.ExpenseTrackerApplication.Controller
+
+┌─────────────────────────────────────────────────────────────────┐
+│ ExpenseController.java                                           │
+├─────────────────────────────────────────────────────────────────┤
+│ @RestController                                                  │
+│ @RequestMapping("/expenses")                                     │
+│                                                                  │
+│ Dependencies:                                                    │
+│   - ExpenseService                                               │
+│   - UserService                                                  │
+│                                                                  │
+│ Endpoints:                                                       │
+│                                                                  │
+│   POST /expenses                                                 │
+│     - Creates new expense                                        │
+│     - Extracts user from Authentication                          │
+│     - Associates expense with authenticated user                 │
+│     - Returns created expense                                    │
+│                                                                  │
+│   GET /expenses                                                  │
+│     - Retrieves all expenses for authenticated user              │
+│     - Extracts user from Authentication                          │
+│     - Returns list of user's expenses                            │
+│                                                                  │
+│   DELETE /expenses/{id}                                          │
+│     - Deletes specific expense                                   │
+│     - Validates ownership through service layer                  │
+│     - Returns void on success                                    │
+│                                                                  │
+│ Security:                                                        │
+│   - All endpoints require authentication                         │
+│   - User context extracted from Spring Security Authentication   │
+│   - Role-based access: USER role required                        │
+└─────────────────────────────────────────────────────────────────┘
+
+5.5 CONFIGURATION LAYER
+────────────────────────────────────────────────────────────────────
+
+Location: com.Projectalpha.ExpenseTrackerApplication.config
+
+┌─────────────────────────────────────────────────────────────────┐
+│ SecurityConfig.java                                              │
+├─────────────────────────────────────────────────────────────────┤
+│ @Configuration                                                   │
+│ @EnableWebSecurity                                               │
+│                                                                  │
+│ Beans:                                                           │
+│                                                                  │
+│   SecurityFilterChain securityFilterChain(HttpSecurity http)     │
+│     - Configures HTTP security                                   │
+│     - Authorization rules:                                       │
+│       • /admin/** → ADMIN role required                          │
+│       • /expenses/** → USER role required                        │
+│       • /user/** → USER role required                            │
+│       • All other requests → Authenticated                       │
+│     - Form login enabled                                         │
+│                                                                  │
+│   PasswordEncoder passwordEncoder()                              │
+│     - Returns BCryptPasswordEncoder                              │
+│     - Used for password hashing and verification                 │
+│                                                                  │
+│ Security Features:                                               │
+│   ✓ Role-based access control                                    │
+│   ✓ BCrypt password encryption                                   │
+│   ✓ Form-based authentication                                    │
+│   ✓ Session management                                           │
+└─────────────────────────────────────────────────────────────────┘
+
+================================================================================
+                        6. SECURITY ARCHITECTURE
+================================================================================
+
+Authentication Flow:
+
+┌─────────────────────────────────────────────────────────────────┐
+│ 1. User sends credentials (email + password)                     │
+└─────────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────────┐
+│ 2. Spring Security intercepts request                            │
+└─────────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────────┐
+│ 3. CustomUserDetailsService.loadUserByUsername() called          │
+│    - Queries database for user by email                          │
+│    - Retrieves user with role                                    │
+└─────────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────────┐
+│ 4. Password verification                                         │
+│    - BCryptPasswordEncoder compares passwords                    │
+│    - Hashed password from DB vs. provided password               │
+└─────────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────────┐
+│ 5. Authentication object created                                 │
+│    - Contains user details and authorities (roles)               │
+│    - Stored in SecurityContext                                   │
+└─────────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────────┐
+│ 6. Request proceeds to controller                                │
+│    - Authentication object available via method parameter        │
+│    - User email extracted: authentication.getName()              │
+└─────────────────────────────────────────────────────────────────┘
+
+Authorization Flow:
+
+┌─────────────────────────────────────────────────────────────────┐
+│ Request to /expenses/**                                          │
+└─────────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────────┐
+│ Spring Security checks SecurityFilterChain rules                 │
+│ - Requires USER role                                             │
+└─────────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────────┐
+│ Checks authenticated user's roles                                │
+│ - If USER role present → Allow                                   │
+│ - If not → 403 Forbidden                                         │
+└─────────────────────────────────────────────────────────────────┘
+
+Security Features:
+
+  ┌────────────────────────────────────────────────────────────┐
+  │ Password Security                                          │
+  ├────────────────────────────────────────────────────────────┤
+  │ ✓ BCrypt hashing algorithm                                 │
+  │ ✓ Automatic salt generation                                │
+  │ ✓ One-way encryption (cannot be decrypted)                 │
+  │ ✓ Configurable strength (default: 10 rounds)               │
+  └────────────────────────────────────────────────────────────┘
+
+  ┌────────────────────────────────────────────────────────────┐
+  │ Role-Based Access Control (RBAC)                           │
+  ├────────────────────────────────────────────────────────────┤
+  │ ✓ USER role: Access to expense operations                  │
+  │ ✓ ADMIN role: Access to admin operations                   │
+  │ ✓ Hierarchical role structure possible                     │
+  └────────────────────────────────────────────────────────────┘
+
+  ┌────────────────────────────────────────────────────────────┐
+  │ Data Isolation                                             │
+  ├────────────────────────────────────────────────────────────┤
+  │ ✓ Users can only access their own expenses                 │
+  │ ✓ Service layer validates ownership                        │
+  │ ✓ Repository queries filter by user                        │
+  └────────────────────────────────────────────────────────────┘
+
+  ┌────────────────────────────────────────────────────────────┐
+  │ Session Management                                         │
+  ├────────────────────────────────────────────────────────────┤
+  │ ✓ Form-based authentication                                │
+  │ ✓ Session cookies for authenticated users                  │
+  │ ✓ Automatic session timeout                                │
+  └────────────────────────────────────────────────────────────┘
+
+================================================================================
+                             7. API DESIGN
+================================================================================
+
+RESTful Principles:
+
+  ✓ Resource-based URLs (/expenses)
+  ✓ HTTP methods for operations (GET, POST, DELETE)
+  ✓ Stateless communication
+  ✓ JSON request/response format
+  ✓ Proper HTTP status codes
+
+API Endpoints:
+
+┌─────────────────────────────────────────────────────────────────┐
+│ POST /expenses                                                   │
+├─────────────────────────────────────────────────────────────────┤
+│ Purpose: Create new expense                                      │
+│ Request: JSON body with expense details                          │
+│ Response: Created expense with ID (200 OK)                       │
+│ Authentication: Required (USER role)                             │
+│ Idempotency: No (creates new resource each time)                 │
+└─────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────┐
+│ GET /expenses                                                    │
+├─────────────────────────────────────────────────────────────────┤
+│ Purpose: Retrieve all expenses for authenticated user            │
+│ Request: No body required                                        │
+│ Response: Array of expense objects (200 OK)                      │
+│ Authentication: Required (USER role)                             │
+│ Idempotency: Yes (safe operation)                                │
+└─────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────┐
+│ DELETE /expenses/{id}                                            │
+├─────────────────────────────────────────────────────────────────┤
+│ Purpose: Delete specific expense                                 │
+│ Request: ID in URL path                                          │
+│ Response: No content (200 OK)                                    │
+│ Authentication: Required (USER role)                             │
+│ Idempotency: Yes (multiple deletes have same effect)             │
+│ Validation: Ensures user owns the expense                        │
+└─────────────────────────────────────────────────────────────────┘
+
+Response Formats:
+
+  Success Response (Expense Object):
+  {
+    "id": 1,
+    "user": { "id": 1, "email": "user@example.com", ... },
+    "category": { "id": 1, "name": "Groceries", ... },
+    "amount": 150.50,
+    "description": "Grocery shopping",
+    "expenseDate": "2026-01-20",
+    "createdAt": "2026-01-20T14:38:00"
+  }
+
+  Error Response:
+  {
+    "timestamp": "2026-01-20T14:38:00",
+    "status": 400,
+    "error": "Bad Request",
+    "message": "Validation failed"
+  }
+
+HTTP Status Codes:
+
+  200 OK - Successful request
+  400 Bad Request - Invalid input
+  401 Unauthorized - Authentication failed
+  403 Forbidden - Insufficient permissions
+  404 Not Found - Resource not found
+  500 Internal Server Error - Server error
+
+================================================================================
+                            8. DATA FLOW
+================================================================================
+
+Create Expense Flow:
+
+Client                Controller           Service            Repository        Database
+  │                       │                   │                   │                │
+  │ POST /expenses        │                   │                   │                │
+  │ + JSON body           │                   │                   │                │
+  ├──────────────────────>│                   │                   │                │
+  │                       │                   │                   │                │
+  │                       │ Extract user      │                   │                │
+  │                       │ from auth         │                   │                │
+  │                       │                   │                   │                │
+  │                       │ getUserByEmail()  │                   │                │
+  │                       ├──────────────────>│                   │                │
+  │                       │                   │ findByEmail()     │                │
+  │                       │                   ├──────────────────>│                │
+  │                       │                   │                   │ SELECT query   │
+  │                       │                   │                   ├───────────────>│
+  │                       │                   │                   │<───────────────┤
+  │                       │                   │<──────────────────┤                │
+  │                       │<──────────────────┤                   │                │
+  │                       │                   │                   │                │
+  │                       │ Set user on       │                   │                │
+  │                       │ expense object    │                   │                │
+  │                       │                   │                   │                │
+  │                       │ addExpense()      │                   │                │
+  │                       ├──────────────────>│                   │                │
+  │                       │                   │ save()            │                │
+  │                       │                   ├──────────────────>│                │
+  │                       │                   │                   │ INSERT query   │
+  │                       │                   │                   ├───────────────>│
+  │                       │                   │                   │<───────────────┤
+  │                       │                   │<──────────────────┤                │
+  │                       │<──────────────────┤                   │                │
+  │                       │                   │                   │                │
+  │<──────────────────────┤                   │                   │                │
+  │ 200 OK + Expense JSON │                   │                   │                │
+
+Get Expenses Flow:
+
+Client                Controller           Service            Repository        Database
+  │                       │                   │                   │                │
+  │ GET /expenses         │                   │                   │                │
+  ├──────────────────────>│                   │                   │                │
+  │                       │                   │                   │                │
+  │                       │ Extract user      │                   │                │
+  │                       │ from auth         │                   │                │
+  │                       │                   │                   │                │
+  │                       │ getUserByEmail()  │                   │                │
+  │                       ├──────────────────>│ findByEmail()     │                │
+  │                       │                   ├──────────────────>│ SELECT query   │
+  │                       │                   │                   ├───────────────>│
+  │                       │                   │                   │<───────────────┤
+  │                       │                   │<──────────────────┤                │
+  │                       │<──────────────────┤                   │                │
+  │                       │                   │                   │                │
+  │                       │ getExpensesByUser()                   │                │
+  │                       ├──────────────────>│                   │                │
+  │                       │                   │ findByUser()      │                │
+  │                       │                   ├──────────────────>│                │
+  │                       │                   │                   │ SELECT query   │
+  │                       │                   │                   │ with JOIN      │
+  │                       │                   │                   ├───────────────>│
+  │                       │                   │                   │<───────────────┤
+  │                       │                   │<──────────────────┤                │
+  │                       │<──────────────────┤                   │                │
+  │                       │                   │                   │                │
+  │<──────────────────────┤                   │                   │                │
+  │ 200 OK + List<Expense>│                   │                   │                │
+
+Delete Expense Flow:
+
+Client                Controller           Service            Repository        Database
+  │                       │                   │                   │                │
+  │ DELETE /expenses/1    │                   │                   │                │
+  ├──────────────────────>│                   │                   │                │
+  │                       │                   │                   │                │
+  │                       │ Extract user      │                   │                │
+  │                       │ from auth         │                   │                │
+  │                       │                   │                   │                │
+  │                       │ getUserByEmail()  │                   │                │
+  │                       ├──────────────────>│ findByEmail()     │                │
+  │                       │                   ├──────────────────>│ SELECT query   │
+  │                       │                   │                   ├───────────────>│
+  │                       │                   │                   │<───────────────┤
+  │                       │                   │<──────────────────┤                │
+  │                       │<──────────────────┤                   │                │
+  │                       │                   │                   │                │
+  │                       │ deleteExpense(1, user)                │                │
+  │                       ├──────────────────>│                   │                │
+  │                       │                   │ findByIdAndUser() │                │
+  │                       │                   ├──────────────────>│                │
+  │                       │                   │                   │ SELECT query   │
+  │                       │                   │                   ├───────────────>│
+  │                       │                   │                   │<───────────────┤
+  │                       │                   │<──────────────────┤                │
+  │                       │                   │                   │                │
+  │                       │                   │ Validate ownership│                │
+  │                       │                   │ (throws if denied)│                │
+  │                       │                   │                   │                │
+  │                       │                   │ delete()          │                │
+  │                       │                   ├──────────────────>│                │
+  │                       │                   │                   │ DELETE query   │
+  │                       │                   │                   ├───────────────>│
+  │                       │                   │                   │<───────────────┤
+  │                       │                   │<──────────────────┤                │
+  │                       │<──────────────────┤                   │                │
+  │                       │                   │                   │                │
+  │<──────────────────────┤                   │                   │                │
+  │ 200 OK (void)         │                   │                   │                │
+
+================================================================================
+                       9. COMPONENT INTERACTIONS
+================================================================================
+
+Dependency Injection Flow:
+
+┌─────────────────────────────────────────────────────────────────┐
+│ Spring Boot Application Startup                                 │
+└─────────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────────┐
+│ Component Scanning                                               │
+│ - Scans @Entity, @Repository, @Service, @Controller             │
+│ - Creates bean definitions                                       │
+└─────────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────────┐
+│ Bean Creation Order                                              │
+│ 1. Configuration beans (SecurityConfig)                          │
+│ 2. Repository beans (ExpenseRepository, UserRepository)          │
+│ 3. Service beans (ExpenseService, UserService)                   │
+│ 4. Controller beans (ExpenseController)                          │
+└─────────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────────┐
+│ Dependency Injection                                             │
+│ - Constructor injection (recommended)                            │
+│ - Repositories injected into Services                            │
+│ - Services injected into Controllers                             │
+└─────────────────────────────────────────────────────────────────┘
+
+Component Dependency Graph:
+
+                    ExpenseController
+                          │
+                          │ depends on
+                          │
+                    ┌─────┴─────┐
+                    │           │
+              ExpenseService  UserService
+                    │           │
+                    │           │ depends on
+                    │           │
+              ┌─────┴─────┐     │
+              │           │     │
+    ExpenseRepository  UserRepository
+              │           │
+              │           │ extends
+              │           │
+              └─────┬─────┘
+                    │
+              JpaRepository
+                    │
+                    │ uses
+                    │
+                 Hibernate
+                    │
+                    │ connects to
+                    │
+              MySQL Database
+
+Transaction Management:
+
+  ┌────────────────────────────────────────────────────────────┐
+  │ @Transactional (implicit in Spring Data JPA)              │
+  ├────────────────────────────────────────────────────────────┤
+  │ - Repository methods are transactional by default          │
+  │ - Service methods can be annotated with @Transactional     │
+  │ - Automatic rollback on runtime exceptions                 │
+  │ - ACID properties maintained                               │
+  └────────────────────────────────────────────────────────────┘
+
+================================================================================
+                         10. DESIGN PATTERNS
+================================================================================
+
+Patterns Used in the Application:
+
+┌─────────────────────────────────────────────────────────────────┐
+│ 1. Layered Architecture Pattern                                 │
+├─────────────────────────────────────────────────────────────────┤
+│ Separates concerns into distinct layers:                        │
+│ - Presentation (Controllers)                                     │
+│ - Business Logic (Services)                                      │
+│ - Data Access (Repositories)                                     │
+│ - Domain Model (Entities)                                        │
+│                                                                  │
+│ Benefits:                                                        │
+│ ✓ Clear separation of concerns                                  │
+│ ✓ Easy to test each layer independently                          │
+│ ✓ Maintainable and scalable                                      │
+└─────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────┐
+│ 2. Repository Pattern                                            │
+├─────────────────────────────────────────────────────────────────┤
+│ Abstracts data access logic:                                     │
+│ - JpaRepository provides CRUD operations                         │
+│ - Custom query methods defined by naming convention              │
+│ - Hides database implementation details                          │
+│                                                                  │
+│ Benefits:                                                        │
+│ ✓ Decouples business logic from data access                      │
+│ ✓ Easy to switch databases                                       │
+│ ✓ Testable with mock repositories                                │
+└─────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────┐
+│ 3. Dependency Injection Pattern                                  │
+├─────────────────────────────────────────────────────────────────┤
+│ Spring manages object creation and dependencies:                 │
+│ - Constructor injection for required dependencies                │
+│ - Loose coupling between components                              │
+│ - Inversion of Control (IoC)                                     │
+│                                                                  │
+│ Benefits:                                                        │
+│ ✓ Loose coupling                                                 │
+│ ✓ Easy to test with mocks                                        │
+│ ✓ Centralized configuration                                      │
+└─────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────┐
+│ 4. Data Transfer Object (DTO) Pattern (Implicit)                │
+├─────────────────────────────────────────────────────────────────┤
+│ Entities serve as DTOs in API responses:                         │
+│ - Expense, User, Category objects transferred as JSON            │
+│ - Jackson automatically serializes/deserializes                  │
+│                                                                  │
+│ Note: For production, consider separate DTO classes to:          │
+│ - Hide sensitive fields (e.g., password)                         │
+│ - Prevent over-fetching                                          │
+│ - Version API contracts                                          │
+└─────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────┐
+│ 5. Service Layer Pattern                                         │
+├─────────────────────────────────────────────────────────────────┤
+│ Business logic encapsulated in service classes:                  │
+│ - ExpenseService handles expense operations                      │
+│ - UserService handles user operations                            │
+│ - Reusable across multiple controllers                           │
+│                                                                  │
+│ Benefits:                                                        │
+│ ✓ Centralized business logic                                     │
+│ ✓ Reusable across different interfaces                           │
+│ ✓ Transaction management                                         │
+└─────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────┐
+│ 6. Builder Pattern (via Lombok)                                 │
+├─────────────────────────────────────────────────────────────────┤
+│ Lombok annotations generate builders:                            │
+│ - @NoArgsConstructor, @AllArgsConstructor                        │
+│ - Simplifies object creation                                     │
+│                                                                  │
+│ Benefits:                                                        │
+│ ✓ Reduces boilerplate code                                       │
+│ ✓ Immutable object creation                                      │
+└─────────────────────────────────────────────────────────────────┘
+
+================================================================================
+                     11. SCALABILITY CONSIDERATIONS
+================================================================================
+
+Current Architecture Limitations:
+
+  ⚠ Single database instance (no replication)
+  ⚠ No caching layer
+  ⚠ Synchronous processing only
+  ⚠ Session-based authentication (not stateless)
+  ⚠ No horizontal scaling support
+
+Scalability Improvements:
+
+┌─────────────────────────────────────────────────────────────────┐
+│ Database Scalability                                             │
+├─────────────────────────────────────────────────────────────────┤
+│ Short-term:                                                      │
+│ - Add database connection pooling (HikariCP - default)           │
+│ - Create indexes on frequently queried columns                   │
+│ - Optimize queries with @Query annotations                       │
+│                                                                  │
+│ Long-term:                                                       │
+│ - Implement read replicas for GET operations                     │
+│ - Database sharding by user_id                                   │
+│ - Consider NoSQL for analytics data                              │
+└─────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────┐
+│ Caching Strategy                                                 │
+├─────────────────────────────────────────────────────────────────┤
+│ - Add Spring Cache with Redis                                    │
+│ - Cache user details for authentication                          │
+│ - Cache category list (rarely changes)                           │
+│ - Cache user's recent expenses                                   │
+│ - Implement cache invalidation on updates                        │
+└─────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────┐
+│ Authentication Scalability                                       │
+├─────────────────────────────────────────────────────────────────┤
+│ - Replace form login with JWT tokens                             │
+│ - Stateless authentication for horizontal scaling                │
+│ - Token-based authentication enables load balancing              │
+│ - Refresh token mechanism for security                           │
+└─────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────┐
+│ Application Scalability                                          │
+├─────────────────────────────────────────────────────────────────┤
+│ - Containerize with Docker                                       │
+│ - Deploy multiple instances behind load balancer                 │
+│ - Use Kubernetes for orchestration                               │
+│ - Implement health checks and auto-scaling                       │
+└─────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────┐
+│ Monitoring and Observability                                     │
+├─────────────────────────────────────────────────────────────────┤
+│ - Add Spring Boot Actuator for metrics                           │
+│ - Implement logging with ELK stack                               │
+│ - Use APM tools (New Relic, Datadog)                             │
+│ - Set up alerts for performance degradation                      │
+└─────────────────────────────────────────────────────────────────┘
+
+Performance Optimization:
+
+  ✓ Lazy loading for entity relationships
+  ✓ Pagination for large result sets
+  ✓ Database query optimization
+  ✓ Connection pooling
+  ✓ Async processing for non-critical operations
+
+================================================================================
+                        12. FUTURE ENHANCEMENTS
+================================================================================
+
+Planned Features:
+
+┌─────────────────────────────────────────────────────────────────┐
+│ 1. User Registration & Management                                │
+├─────────────────────────────────────────────────────────────────┤
+│ - POST /auth/register endpoint                                   │
+│ - Email verification                                             │
+│ - Password reset functionality                                   │
+│ - User profile management                                        │
+│ - Account settings                                               │
+└─────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────┐
+│ 2. Expense Analytics                                             │
+├─────────────────────────────────────────────────────────────────┤
+│ - GET /expenses/analytics endpoint                               │
+│ - Total expenses by category                                     │
+│ - Monthly/yearly spending trends                                 │
+│ - Budget tracking and alerts                                     │
+│ - Expense forecasting                                            │
+└─────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────┐
+│ 3. Update Expense                                                │
+├─────────────────────────────────────────────────────────────────┤
+│ - PUT /expenses/{id} endpoint                                    │
+│ - PATCH /expenses/{id} for partial updates                       │
+│ - Audit trail for changes                                        │
+└─────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────┐
+│ 4. Advanced Filtering & Search                                   │
+├─────────────────────────────────────────────────────────────────┤
+│ - GET /expenses?category=1&startDate=...&endDate=...             │
+│ - Search by description                                          │
+│ - Amount range filtering                                         │
+│ - Sorting options                                                │
+│ - Pagination support                                             │
+└─────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────┐
+│ 5. Category Management                                           │
+├─────────────────────────────────────────────────────────────────┤
+│ - GET /categories endpoint                                       │
+│ - POST /categories (admin only)                                  │
+│ - Custom user categories                                         │
+│ - Category icons and colors                                      │
+└─────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────┐
+│ 6. Recurring Expenses                                            │
+├─────────────────────────────────────────────────────────────────┤
+│ - Support for recurring expenses (monthly, yearly)                │
+│ - Automatic expense creation                                     │
+│ - Scheduled jobs with Spring Scheduler                           │
+└─────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────┐
+│ 7. Export & Import                                               │
+├─────────────────────────────────────────────────────────────────┤
+│ - Export expenses to CSV/Excel                                   │
+│ - Import expenses from files                                     │
+│ - PDF report generation                                          │
+└─────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────┐
+│ 8. Multi-currency Support                                        │
+├─────────────────────────────────────────────────────────────────┤
+│ - Currency field in expenses                                     │
+│ - Exchange rate integration                                      │
+│ - Currency conversion for analytics                              │
+└─────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────┐
+│ 9. Notifications                                                 │
+├─────────────────────────────────────────────────────────────────┤
+│ - Email notifications for budget limits                          │
+│ - Weekly/monthly expense summaries                               │
+│ - Reminder for recurring expenses                                │
+└─────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────┐
+│ 10. API Documentation                                            │
+├─────────────────────────────────────────────────────────────────┤
+│ - Integrate Swagger/OpenAPI                                      │
+│ - Interactive API documentation                                  │
+│ - Auto-generated from code annotations                           │
+└─────────────────────────────────────────────────────────────────┘
+
+Technical Improvements:
+
+  □ Add input validation with @Valid annotations
+  □ Implement global exception handler
+  □ Add request/response logging
+  □ Implement rate limiting
+  □ Add API versioning (/api/v1/expenses)
+  □ Implement CORS configuration for frontend
+  □ Add comprehensive unit and integration tests
+  □ Set up CI/CD pipeline
+  □ Containerize with Docker
+  □ Add health check endpoints
+
+================================================================================
+                              CONCLUSION
+================================================================================
+
+The Expense Tracker application follows a well-structured layered architecture
+with clear separation of concerns. The use of Spring Boot and Spring Security
+provides a robust foundation for building secure, scalable REST APIs.
+
+Key Strengths:
+  ✓ Clean layered architecture
+  ✓ Secure authentication and authorization
+  ✓ Data isolation between users
+  ✓ RESTful API design
+  ✓ Dependency injection for loose coupling
+  ✓ ORM for database abstraction
+
+Areas for Improvement:
+  ⚠ Add JWT for stateless authentication
+  ⚠ Implement caching layer
+  ⚠ Add comprehensive error handling
+  ⚠ Implement API documentation
+  ⚠ Add automated testing
+  ⚠ Implement pagination and filtering
+
+The current architecture provides a solid foundation that can be extended
+with additional features and optimizations as the application grows.
+
+================================================================================
+                              END OF DOCUMENT
+================================================================================
