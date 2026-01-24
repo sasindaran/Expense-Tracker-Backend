@@ -22,6 +22,7 @@ import java.util.List;
 public class SecurityConfig {
     @Value("${app.frontend.url}")
     private String frontendUrl;
+
     @Bean
     SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
 
@@ -44,14 +45,15 @@ public class SecurityConfig {
         return http.build();
     }
 
-
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
 
         CorsConfiguration config = new CorsConfiguration();
 
+        config.setAllowedOrigins(
+                List.of(frontendUrl.split(","))
+        );
 
-        config.setAllowedOrigins(List.of(frontendUrl));
 
         config.setAllowedMethods(
                 List.of("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
