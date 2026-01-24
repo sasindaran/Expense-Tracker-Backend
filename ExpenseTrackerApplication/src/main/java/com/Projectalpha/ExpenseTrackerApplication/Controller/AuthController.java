@@ -47,7 +47,7 @@ public class AuthController {
         SecurityContext context = SecurityContextHolder.createEmptyContext();
         context.setAuthentication(authentication);
 
-        // 🔥 THIS IS THE FIX
+        //THIS IS THE FIX
         httpRequest.getSession(true)
                 .setAttribute(
                         HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY,
