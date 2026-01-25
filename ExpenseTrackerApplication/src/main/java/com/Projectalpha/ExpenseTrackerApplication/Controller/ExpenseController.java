@@ -37,6 +37,7 @@ public class ExpenseController {
     public List<Expense> getMyExpenses(Authentication authentication) {
 
         String email = authentication.getName();
+        System.out.println("Authenticated mail: " + email+"is accessing expenses");
         User user = userService.getUserByEmail(email);
 
         return expenseService.getExpensesByUser(user);
