@@ -4,14 +4,14 @@ A Full Stack Expense Tracker Web Application built using Java, JSP, MySQL (Backe
 
 ---
 
-## 🚀 Live Demo
+## 🚀 Live Application
     
 https://expense-tracker-frontend-one-xi.vercel.app/login
 
 ---
 
 ## 🖥️ Frontend Repository
-👉 https://github.com/your-username/frontend-repo-link](https://github.com/sasindaran/Expense-Tracker-Frontend
+👉 https://github.com/sasindaran/Expense-Tracker-Frontend
 
 ---
 
